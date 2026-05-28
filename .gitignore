@@ -1,0 +1,26 @@
+# Default ignored files
+/shelf/
+/.idea/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+# Временные файлы сборки Gradle (то, что генерируется при ./gradlew build)
+.gradle/
+build/
+out/
+
+# Настройки твоей IntelliJ IDEA (персональные конфиги темы, путей и окон)
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Логи и временные файлы системы
+*.log
+.DS_Store
+Thumbs.db
+
+# Конфиденциальные данные (если вдруг решишь прописать пароли от почты в файл)
+.env
