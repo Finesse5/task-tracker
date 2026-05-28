@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Tracker</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+        .container { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        h1 { text-align: center; margin-bottom: 24px; color: #2563eb; }
+        .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+        input, textarea { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-bottom: 10px; }
+        button { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .btn-primary { background: #2563eb; color: #fff; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-success { background: #22c55e; color: #fff; }
+        .btn-secondary { background: #6b7280; color: #fff; }
+        .tab-buttons { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #2563eb; background: #fff; color: #2563eb; font-weight: 600; cursor: pointer; }
+        .tab-btn.active { background: #2563eb; color: #fff; }
+        #auth-section, #app-section { display: none; }
+        .task-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+        .task-item.done { opacity: .6; border-left: 4px solid #22c55e; }
+        .task-item.waiting { border-left: 4px solid #f59e0b; }
+        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .task-title { font-weight: 700; font-size: 16px; }
+        .task-status { font-size: 12px; padding: 2px 10px; border-radius: 20px; }
+        .status-done { background: #dcfce7; color: #166534; }
+        .status-waiting { background: #fef3c7; color: #92400e; }
+        .task-desc { color: #6b7280; font-size: 14px; margin-bottom: 10px; }
+        .task-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .task-actions button { padding: 6px 14px; font-size: 13px; }
+        .error { color: #ef4444; font-size: 13px; margin-top: 6px; }
+        .user-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        #new-task-form { margin-bottom: 20px; }
+        .form-row { display: flex; gap: 10px; }
+        .form-row input { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Task Tracker</h1>
+
+    <div id="auth-section">
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="showTab('login')">Вход</button>
+            <button class="tab-btn" onclick="showTab('register')">Регистрация</button>
+        </div>
+
+        <div class="card" id="login-form">
+            <h2 style="margin-bottom:16px">Вход</h2>
+            <input type="email" id="login-email" placeholder="Email">
+            <input type="password" id="login-password" placeholder="Пароль">
+            <button class="btn-primary" onclick="login()">Войти</button>
+            <p class="error" id="login-error"></p>
+        </div>
+
+        <div class="card" id="register-form" style="display:none">
+            <h2 style="margin-bottom:16px">Регистрация</h2>
+            <input type="email" id="reg-email" placeholder="Email">
+            <input type="password" id="reg-password" placeholder="Пароль (минимум 4 символа)">
+            <input type="password" id="reg-repeat" placeholder="Подтверждение пароля">
+            <button class="btn-primary" onclick="register()">Зарегистрироваться</button>
+            <p class="error" id="reg-error"></p>
+        </div>
+    </div>
+
+    <div id="app-section">
+        <div class="card">
+            <div class="user-bar">
+                <span id="user-email-display"></span>
+                <button class="btn-secondary" onclick="logout()">Выйти</button>
+            </div>
+        </div>
+
+        <div class="card" id="new-task-form">
+            <h3 style="margin-bottom:12px">Новая задача</h3>
+            <input type="text" id="task-title" placeholder="Заголовок (до 200 символов)" maxlength="200">
+            <textarea id="task-desc" placeholder="Описание (необязательно)" rows="3"></textarea>
+            <button class="btn-primary" onclick="createTask()">Добавить задачу</button>
+            <p class="error" id="task-error"></p>
+        </div>
+
+        <div id="tasks-list"></div>
+    </div>
+</div>
+
+<script>
+    let token = localStorage.getItem('jwt');
+    let currentUser = null;
+
+    function api(method, url, data) {
+        return $.ajax({
+            method, url,
+            contentType: 'application/json',
+            data: data ? JSON.stringify(data) : undefined,
+            headers: token ? { Authorization: 'Bearer ' + token } : {}
+        });
+    }
+
+    function showTab(tab) {
+        $('.tab-btn').removeClass('active');
+        if (tab === 'login') {
+            $('#login-form').show(); $('#register-form').hide();
+            $('.tab-btn:eq(0)').addClass('active');
+        } else {
+            $('#login-form').hide(); $('#register-form').show();
+            $('.tab-btn:eq(1)').addClass('active');
+        }
+    }
+
+    function onAuth(xhr) {
+        token = xhr.getResponseHeader('Authorization').replace('Bearer ', '');
+        localStorage.setItem('jwt', token);
+        loadApp();
+    }
+
+    function login() {
+        $('#login-error').text('');
+        api('POST', '/login', { email: $('#login-email').val(), password: $('#login-password').val() })
+            .done((d, s, xhr) => onAuth(xhr))
+            .fail(xhr => $('#login-error').text(xhr.responseJSON?.detail || 'Ошибка входа'));
+    }
+
+    function register() {
+        $('#reg-error').text('');
+        api('POST', '/register', {
+            email: $('#reg-email').val(),
+            password: $('#reg-password').val(),
+            repeatPassword: $('#reg-repeat').val()
+        })
+            .done((d, s, xhr) => onAuth(xhr))
+            .fail(xhr => $('#reg-error').text(xhr.responseJSON?.detail || 'Ошибка регистрации'));
+    }
+
+    function logout() {
+        token = null;
+        localStorage.removeItem('jwt');
+        currentUser = null;
+        $('#app-section').hide();
+        $('#auth-section').show();
+    }
+
+    function loadApp() {
+        api('GET', '/me').done(user => {
+            currentUser = user;
+            $('#user-email-display').text('👤 ' + user.email);
+            $('#auth-section').hide();
+            $('#app-section').show();
+            loadTasks();
+        }).fail(() => logout());
+    }
+
+    function loadTasks() {
+        api('GET', '/tasks').done(tasks => {
+            const list = $('#tasks-list');
+            list.empty();
+            if (!tasks.length) {
+                list.html('<div class="card" style="text-align:center;color:#6b7280">Задач пока нет. Создайте первую!</div>');
+                return;
+            }
+            tasks.forEach(t => list.append(renderTask(t)));
+        });
+    }
+
+    function renderTask(t) {
+        const isDone = t.status === 'DONE';
+        const statusClass = isDone ? 'status-done' : 'status-waiting';
+        const statusText = isDone ? 'Выполнено' : 'Ожидает';
+        const assignee = t.assigneeId ? `<span style="font-size:12px;color:#6b7280">Исполнитель ID: ${t.assigneeId}</span>` : '';
+        return `
+        <div class="task-item ${isDone ? 'done' : 'waiting'}" id="task-${t.id}">
+            <div class="task-header">
+                <span class="task-title">${escapeHtml(t.title)}</span>
+                <span class="task-status ${statusClass}">${statusText}</span>
+            </div>
+            ${t.description ? `<p class="task-desc">${escapeHtml(t.description)}</p>` : ''}
+            ${assignee}
+            <div class="task-actions" style="margin-top:10px">
+                <button class="btn-${isDone ? 'secondary' : 'success'}" onclick="toggleStatus(${t.id}, ${isDone})">
+                    ${isDone ? 'Вернуть в работу' : 'Отметить выполненной'}
+                </button>
+                <button class="btn-primary" onclick="editTask(${t.id}, '${escapeHtml(t.title)}', '${escapeHtml(t.description || '')}')">Редактировать</button>
+                <button class="btn-danger" onclick="deleteTask(${t.id})">Удалить</button>
+            </div>
+        </div>`;
+    }
+
+    function escapeHtml(str) {
+        return $('<div>').text(str).html();
+    }
+
+    function createTask() {
+        $('#task-error').text('');
+        const title = $('#task-title').val().trim();
+        if (!title) { $('#task-error').text('Введите заголовок'); return; }
+        api('POST', '/tasks', { title, description: $('#task-desc').val() })
+            .done(() => { $('#task-title').val(''); $('#task-desc').val(''); loadTasks(); })
+            .fail(xhr => $('#task-error').text(xhr.responseJSON?.detail || 'Ошибка создания'));
+    }
+
+    function toggleStatus(id, isDone) {
+        api('PATCH', `/tasks/${id}/status`, { done: !isDone }).done(loadTasks);
+    }
+
+    function deleteTask(id) {
+        if (!confirm('Удалить задачу?')) return;
+        api('DELETE', `/tasks/${id}`).done(loadTasks);
+    }
+
+    function editTask(id, currentTitle, currentDesc) {
+        const newTitle = prompt('Новый заголовок:', currentTitle);
+        if (newTitle === null) return;
+        const newDesc = prompt('Новое описание:', currentDesc);
+        if (newDesc === null) return;
+        api('PUT', `/tasks/${id}`, { title: newTitle, description: newDesc }).done(loadTasks);
+    }
+
+    $(document).ready(() => {
+        if (token) {
+            loadApp();
+        } else {
+            $('#auth-section').show();
+        }
+    });
+</script>
+</body>
+</html>
